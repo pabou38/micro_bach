@@ -1,0 +1,17 @@
+# Name,   Type, SubType, Offset,   Size, Flags
+nvs,      data, nvs,     0x9000,   20K,
+otadata,  data, ota,     0xe000,   8K,
+firm,	  app,	factory, 	 , 3844K,
+
+
+# 0x1000 = 4K
+#Offset must be multiple of 4kB (0x1000) and for app partitions it must be aligned by 64kB (0x10000).
+# bootloader, partition table 
+#the bootloader (offset 0x1000 and size of 0x7000)  28K
+# partition table section offset (offset 0x8000 and size of 0x1000) 4k
+
+# 4K + 28K + 4K + 20K + 8K = 64K
+
+#firm,	  app,	factory, 	 , 3400K,
+#eeprom,   data, 0x99,    , 4K,
+#spiffs,   data, spiffs,  , 444K,
