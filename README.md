@@ -1,7 +1,7 @@
 # micro_bach
-adapt tensorflow's play_bach to micro controler. using TFlite micro. ESP32
+Generates and play BACH music with Tensorflow Lite for microcontroler 
 
-see also https://github.com/pabou38/play_bach. it contains the 'larger' python application, including training (locally on desktop or colab).
+This leverage https://github.com/pabou38/play_bach. This repo contains the 'larger' python application, including training (locally on desktop or colab) and tensorflow lite model generation (all quantization options). also generate edgeTPU models.
 
 developped with VScode and platformio.
 
