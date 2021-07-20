@@ -5,7 +5,7 @@ Generates and play BACH music with Tensorflow Lite for microcontroler.
 
 - ESP32 dev kit (4MB flash)
 
-- Adafruit VS1053 MIDI breakout , used as MIDI synth (https://learn.adafruit.com/adafruit-vs1053-mp3-aac-ogg-midi-wav-play-and-record-codec-tutorial)
+- Adafruit VS1053 MIDI breakout , used as MIDI synth (https://learn.adafruit.com/adafruit-vs1053-mp3-aac-ogg-midi-wav-play-and-record-codec-tutorial). This board can drive headset or powered speakers. One can also add a small amp (GF1002) and 3W, 4Ohm speakers (https://www.amazon.com/CQRobot-JST-PH2-0-Interface-Electronic-Projects/dp/B0738NLFTG)
 - Some neopixel led. Will blink when playing notes (https://www.adafruit.com/product/1734)
 - 3.3 to 5V level shitfter, to drive neopixels (https://www.adafruit.com/product/1787)
 - I2C LCD display (https://eu.mouser.com/ProductDetail/Newhaven-Display/NHD-0416BZ-FL-GBW?qs=3vk7fz9CmNzcJfNAixTouw%3D%3D)
