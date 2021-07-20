@@ -19,3 +19,5 @@ The src directory contains main.cpp, the TFlite micro model, and corpus/dictiona
 
 Please see also 
 https://medium.com/nerd-for-tech/play-bach-let-a-neural-network-play-for-you-part-1-596e54b1c912 for more context for this work. it is a serie of Medium post.
+
+![Screenshot](README.png)
