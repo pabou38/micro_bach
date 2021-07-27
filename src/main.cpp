@@ -1,21 +1,20 @@
 //#include <Arduino.h>
 
-
 #include <Wire.h>              //for ESP8266 use bug free i2c driver https://github.com/enjoyneering/ESP8266-I2C-Driver
 #include <LiquidCrystal_I2C.h>
 
 #include <Adafruit_NeoPixel.h>
 
-LiquidCrystal_I2C lcd(0x27, 16, 4);
+LiquidCrystal_I2C lcd(0x27, 16, 4); 
 
 #include "Arduino.h"
 //#define DEFAULT 1  in above  WTF
 
-
-// How many NeoPixels are attached to the Arduino?
 #define LED_COUNT 3
-#define LED_PIN   2
+#define LED_PIN   2 // data pin for neopixels
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+#define config 14 // internal pull up. configure real time or batch
 
 #include "model.h"
 
@@ -98,20 +97,23 @@ int midi_len = 0 ; // set by parse function with number of midi code
 const int midi_base = 60; // default octave for chords in normal mode
 int duration = 200; // ms
 
+// potentiometer to configure MIDI instrument
 int adc;
 #define adc_pin 36
-int inst;
 
-const boolean real_time = false;
 
-const int to_play_nb = 50; // nb of notes or chords to predict before rendering
+// either generate sound in real time (inference time on ESP32 fp32 is > 1sec) or generate all notes in batch and play
+// set based on GPIO
+boolean real_time;
+
+const int to_play_nb = 40; // nb of notes or chords to predict before rendering. used for batch only
+
+// all midi code to play. use special char (-2) to separate notes/chords
+int to_play[5*to_play_nb]; // account for separator, chords
 int to_play_index = 0; // index in array
 
-// all midi code to play. use special char to separate
-int to_play[5*to_play_nb]; // account for separator, chords
 
-PROGMEM const char *instrument[] =  {"piano", "occarina", "plause" };
-
+// based on ADAFRUIT library
 void midiSetInstrument(uint8_t chan, uint8_t inst) {
   if (chan > 15) return;
   inst --; // page 32 has instruments starting with 1 not 0 :(
@@ -158,6 +160,23 @@ void midiNoteOff(uint8_t chan, uint8_t n, uint8_t vel) {
   VS1053_MIDI.write(MIDI_NOTE_OFF | chan);
   VS1053_MIDI.write(n);
   VS1053_MIDI.write(vel);
+}
+
+#include "instrument.h"
+int inst; 
+
+void set_instrument() {
+  // read pot, map to instrument, set MIDI intrument
+  // ADC 0 to 3490
+  adc = analogRead(adc_pin);
+  inst = map(adc,0,3500,0,127);
+  //TF_LITE_REPORT_ERROR(error_reporter, "ADC %d %s", adc, instrument[inst]);
+  lcd.setCursor(0,3);
+  lcd.print("                ");
+  lcd.setCursor(0,3);
+  lcd.print(instrument[inst]);
+  midiSetInstrument(0, inst);
+
 }
 
 
@@ -301,7 +320,9 @@ else { // this is a chord
   }
 } // parse
 
-
+//----------------------------------------------------------------------------------
+// SETUP
+//---------------------------------------------------------------------------------
 void setup() {
 
   Serial.begin(9600);
@@ -315,9 +336,13 @@ void setup() {
 
   TF_LITE_REPORT_ERROR(error_reporter, "\n\nPABOU BACH starting");
 
-  // ADC 0 to 3490
-  adc = analogRead(adc_pin);
-  TF_LITE_REPORT_ERROR(error_reporter, "ADC %d", adc);
+  pinMode(config, INPUT_PULLUP); // default not connected to ground, batch
+
+  // read gpio, if grounded , realtime mode. if not connected, batch
+  if (digitalRead(config) == 0) {real_time = true;} else {real_time = false;}
+
+  TF_LITE_REPORT_ERROR(error_reporter, "config pin %d. if 0 real time" , digitalRead(config));
+
 
   TF_LITE_REPORT_ERROR(error_reporter, "create LCD");
   lcd.begin();
@@ -329,11 +354,8 @@ void setup() {
   lcd.print("TF lite micro");
   lcd.setCursor(0,1);
   lcd.print("micro bach");
- 
-  lcd.setCursor(0,3);
-  lcd.print("instrument");
-  //lcd.setCursor(12,3);
-  //lcd.print(adc);
+
+  set_instrument();
 
   TF_LITE_REPORT_ERROR(error_reporter, "create neopixels");
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
@@ -341,8 +363,6 @@ void setup() {
   strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   // test neopixels
-
-  
   for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
     strip.setPixelColor(i, strip.Color(0,   255,   0));         //  Set pixel's color (in RAM)
     strip.show();                          //  Update strip to match
@@ -351,13 +371,6 @@ void setup() {
   }
    strip.clear();
    strip.show();   
-
-
-// ADC 0 to 3490
-int x;
-
-x = analogRead(36);
-TF_LITE_REPORT_ERROR(error_reporter, "ADC %d", x);
   
   VS1053_MIDI.begin(31250); // MIDI uses a 'strange baud rate'
 
@@ -369,33 +382,35 @@ TF_LITE_REPORT_ERROR(error_reporter, "ADC %d", x);
   delay(10);
 
   midiSetChannelBank(0, VS1053_BANK_MELODY);
-  midiSetInstrument(0, VS1053_GM1_OCARINA);
+
+  //midiSetInstrument(0, VS1053_GM1_OCARINA);
+  set_instrument(); // read instrument from potentiometer
+  //midiSetInstrument(0, inst);
+
   midiSetChannelVolume(0, 127);
 
   TF_LITE_REPORT_ERROR(error_reporter, "VS1053 started");
 
-  // dictionary
-
-  TF_LITE_REPORT_ERROR(error_reporter, "dictionary:");
-   for (int i =0; i < dictionary_len; i++) {
+  // print dictionary and corpus
+  //TF_LITE_REPORT_ERROR(error_reporter, "dictionary:");
+  // for (int i =0; i < dictionary_len; i++) {
     //TF_LITE_REPORT_ERROR(error_reporter, dictionary[i]);
-   }
-
+  // }
 
   //for (int i =0; i < corpus_len; i++) {
   //  Serial.println(corpus[i]);
   //}
 
+
+
 // ---------------------------------------------------
 // for testing, parsing all dictionary
 // ---------------------------------------------------
-  Serial.println("parsing dictionary");
+  
   //for (int i=0; i< dictionary_len; i++) {
    //TF_LITE_REPORT_ERROR(error_reporter, "\ntest: will parse #%d, %s", i, dictionary[i]);
    //midi_parse(dictionary[i]); 
-  //}
-  Serial.println("DONE parsing dictionary");
-  
+  //}  
 
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.
@@ -489,6 +504,11 @@ TF_LITE_REPORT_ERROR(error_reporter, "end of setup");
 
 } // setup
 
+
+//--------------------------------------------------------------------------
+// LOOP
+//---------------------------------------------------------------------------
+
 void loop() {
   boolean new_seed = false;
   char *pi;
@@ -498,6 +518,10 @@ void loop() {
   // ------------------------------------------------------------------
 
   if(real_time) {
+
+    // update instrument from potentiometer
+    set_instrument();
+
     // get random seed. A long is an integer. No conversion necessary
     seed = random(corpus_len-seqlen-1);
     seed = 0; // to test
@@ -521,6 +545,8 @@ void loop() {
 
       // parse String, fill midi_code array 
       midi_parse(pi); 
+
+      set_instrument();
     
       // play each individual midi code
       for (int j=0; j<midi_len; j++) {
@@ -543,6 +569,9 @@ void loop() {
     // ----------------------------------------------------------------
     while (true) {
 
+      // update instrument from potentiometer
+      set_instrument();
+
    if (input->type == kTfLiteInt8)  {
      TF_LITE_REPORT_ERROR(error_reporter, "input is int 8");
 
@@ -558,13 +587,13 @@ void loop() {
       input->data.int8[i] = x_quantized;
     }
 
-   } // int8
+   } // int8 model
 
    else {
 
     //TF_LITE_REPORT_ERROR(error_reporter, "input is fp32");
 
-    // model was trained with X normalized
+    // model was trained with X normalized. above values are from training program. can we pass as model metadata ?
     float X_mean = 72.97;
     float X_std = 14.58;
     float x;
@@ -577,7 +606,7 @@ void loop() {
       input->data.f[i] = x; // convert int to FLOAT
   }
 
-  } // fp32
+  } // fp32 model
 
 
   // Run inference, and report any error
@@ -590,12 +619,15 @@ void loop() {
     TF_LITE_REPORT_ERROR(error_reporter, "Invoke failed");
     return;
   }
+
+  // 1550ms with fp32
+
   //TF_LITE_REPORT_ERROR(error_reporter, "Inference ms %f", millis() - my_time);
   // TF use power of 2
 
   //sprintf(buffer, "inference %d ms", (millis()-inference));
   //Serial.println(buffer);
-  // 1550ms with fp32
+  
 
   int softmax = output->dims->data[1];
   //TF_LITE_REPORT_ERROR(error_reporter, "output softmax size %d", softmax);
@@ -667,11 +699,11 @@ void loop() {
   */
 
 
-  while (!new_seed) {
+  while (!new_seed) { // will be set to true when all predictions have been generated and played
 
   // get random seed. A long is an integer. No conversion necessary
   seed = random(corpus_len-seqlen-1);
-  seed = 0; // to test
+  //seed = 0; // to test
 
   int x = seed; // keep seed value intact. needed later
   TF_LITE_REPORT_ERROR(error_reporter, "BATCH. random seed index %d ", seed);
@@ -689,6 +721,10 @@ void loop() {
   // run n inferences
 
     for (int n=0; n< to_play_nb ; n++) {
+
+      // update instrument from potentiometer
+      set_instrument();
+
 
     TF_LITE_REPORT_ERROR(error_reporter, "BATCH inference: %d %d", n, to_play_index);
 
@@ -766,18 +802,6 @@ void loop() {
     } // run n inferences
 
     TF_LITE_REPORT_ERROR(error_reporter, "batch: all inference done. time to render %d" , to_play_index);
-
-    // map adc to instrument
-      adc = analogRead(adc_pin);
-      inst = map(analogRead(adc_pin), 0, 4096, 1, 128 );
-
-      TF_LITE_REPORT_ERROR(error_reporter, "BATCH. mapping %d to %d ", adc, inst);
-
-      // set instrument 
-      midiSetInstrument(0, inst);
-      midiSetChannelVolume(0, 100);
-      lcd.setCursor(12,3);
-      lcd.print(inst);
     
     //-------------------------------------------------------------
     // play seed 
@@ -785,9 +809,13 @@ void loop() {
     // convert int to string, parse string into to individual pitches and duration, convert to midi code and play midi code
 
     TF_LITE_REPORT_ERROR(error_reporter, "batch: play seed index %d seqlen %d" , seed, seqlen);
-    for (int i=seed; i< seqlen; i++) { // play seed
+    for (int i=0; i< seqlen; i++) { // play seed
+
+      // update instrument from potentiometer
+      set_instrument();
+
       // convert int into String (or char array);
-      pi = dictionary[corpus[i]]; 
+      pi = dictionary[corpus[seed+i]]; 
       TF_LITE_REPORT_ERROR(error_reporter, "BATCH. play seed note %s ", pi);
 
       // parse String, fill midi_code array 
@@ -812,6 +840,9 @@ void loop() {
       // rendering prediction
       // ---------------------------------------------------------------
 
+      lcd.setCursor(0,2);
+      lcd.print("PREDICTING...");
+
       // to_play is an array of midi code, separated by -2;
 
       int len = to_play_index; // of array created
@@ -825,6 +856,10 @@ void loop() {
       int pixel;
 
       while (to_play_index < len) { // scan array of midi code
+
+        // update instrument from potentiometer
+        set_instrument();
+
         code = to_play[to_play_index];
         to_play_index = to_play_index +1;
 
@@ -880,6 +915,8 @@ void loop() {
         } // while , scan array of midi code // render all midi codes in to_play array
         strip.clear();
         new_seed = true; // force exit and start from loop() again. get new seed 
+        lcd.setCursor(0,2);
+        lcd.print("                ");
 
   } // while !new_seed
     
